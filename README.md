@@ -6,7 +6,7 @@ Requirements
 
 You can run the required version of the ActiveMq server in a container, instead of having to install it, like this:
 
-    docker run 
+    docker-compose -f src/main/resources/activemq-docker-compose.yml up
 
 and stop and destroy it like this:
 
