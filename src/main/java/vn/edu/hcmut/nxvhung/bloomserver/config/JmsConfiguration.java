@@ -1,6 +1,8 @@
 package vn.edu.hcmut.nxvhung.bloomserver.config;
 
+import java.util.List;
 import org.apache.activemq.ActiveMQConnectionFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
@@ -13,12 +15,21 @@ import org.springframework.jms.core.JmsTemplate;
 @ComponentScan(basePackages = "vn.edu.hcmut.nxvhung.bloomserver")
 public class JmsConfiguration {
 
+  @Value("${spring.activemq.broker-url}")
+  private String brokerUrl;
+  @Value("${spring.activemq.user}")
+  private String username;
+  @Value("${spring.activemq.password}")
+
+  private String password;
   @Bean
   public ActiveMQConnectionFactory connectionFactory() {
     ActiveMQConnectionFactory connectionFactory = new ActiveMQConnectionFactory();
-    connectionFactory.setBrokerURL("activemq:8161");
-    connectionFactory.setUserName("admin");
-    connectionFactory.setPassword("admin");
+    connectionFactory.setBrokerURL(brokerUrl);
+    connectionFactory.setUserName(username);
+    connectionFactory.setPassword(password);
+    connectionFactory.setTrustAllPackages(true);
+    connectionFactory.setTrustedPackages(List.of("vn.edu.hcmut.nxvhung"));
 
     return connectionFactory;
   }

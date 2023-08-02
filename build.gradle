@@ -16,13 +16,13 @@ repositories {
 }
 
 dependencies {
-//	implementation 'org.springframework.boot:spring-boot-starter-amqp'
+	//implementation 'org.springframework.boot:spring-boot-starter-amqp'
   implementation 'org.springframework.boot:spring-boot-starter'
 
 	implementation 'org.springframework.boot:spring-boot-starter-web'
 	implementation group: 'org.springframework.boot', name: 'spring-boot-starter-activemq', version: '3.1.1'
 
-	implementation 'com.github.vectorclock:vector-clock:1.0-SNAPSHOT'
+	//implementation 'com.github.vectorclock:vector-clock:1.0-SNAPSHOT'
 	implementation 'vn.edu.hcmut.nxvhung:bloom-filter:0.0.1-SNAPSHOT'
 
 }
@@ -34,4 +34,8 @@ tasks.named('test') {
 repositories {
 	mavenCentral()
 	mavenLocal()
+   maven {
+       url 'file://D:/Working/workspace/.m2/repository'
+   }
+
 }
