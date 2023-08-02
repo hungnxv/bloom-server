@@ -26,7 +26,7 @@ public class BloomSender {
     jmsTemplate.send(destination, new MessageCreator() {
       public Message createMessage(Session session) throws JMSException {
 
-        return session.createTextMessage(message + value);
+        return session.createTextMessage(message);
       }
     });
   }

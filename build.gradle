@@ -20,12 +20,18 @@ dependencies {
   implementation 'org.springframework.boot:spring-boot-starter'
 
 	implementation 'org.springframework.boot:spring-boot-starter-web'
-  implementation group: 'org.springframework.boot', name: 'spring-boot-starter-activemq', version: '3.1.1'
+	implementation group: 'org.springframework.boot', name: 'spring-boot-starter-activemq', version: '3.1.1'
 
-	testImplementation 'org.springframework.boot:spring-boot-starter-test'
-	testImplementation 'org.springframework.amqp:spring-rabbit-test'
+	implementation 'com.github.vectorclock:vector-clock:1.0-SNAPSHOT'
+	implementation 'vn.edu.hcmut.nxvhung:bloom-filter:0.0.1-SNAPSHOT'
+
 }
 
 tasks.named('test') {
 	useJUnitPlatform()
+}
+
+repositories {
+	mavenCentral()
+	mavenLocal()
 }

@@ -1,9 +1,9 @@
 version: '3'
 services:
   activemq:
-    image: rmohr/activemq:5.18.2
+    image: rmohr/activemq:5.15.9
     ports:
       - 61616:61616
       - 8161:8161
     volumes:
-      - ./data:/data
+      -./activemq/data:/data/activemq

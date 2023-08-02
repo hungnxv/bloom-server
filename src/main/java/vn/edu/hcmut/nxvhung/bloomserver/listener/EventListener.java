@@ -1,21 +1,18 @@
 package vn.edu.hcmut.nxvhung.bloomserver.listener;
 
 import jakarta.jms.JMSException;
-import jakarta.jms.Message;
 import jakarta.jms.TextMessage;
-import java.util.Map;
 import org.springframework.jms.annotation.JmsListener;
-import org.springframework.messaging.handler.annotation.SendTo;
 import org.springframework.stereotype.Component;
+import vn.edu.hcmut.nxvhung.bloomfilter.common.dto.dto.Message;
 
 @Component
 public class EventListener {
 
-  @JmsListener(destination = "companyA_request")
-//  @SendTo("outbound.queue")
+  @JmsListener(destination = "company_A_request")
   public String receiveMessage(final Message jsonMessage) throws JMSException {
     String messageData = null;
-    System.out.println("Tin nhắn nhận được: " + jsonMessage);
+    System.out.println("Tin nhắn nhận được: " + jsonMessage.getLogicalTimestamp() + jsonMessage.getBlacklist());
     String response = null;
     if(jsonMessage instanceof TextMessage) {
       TextMessage textMessage = (TextMessage)jsonMessage;
