@@ -3,15 +3,14 @@ package vn.edu.hcmut.nxvhung.bloomserver.rest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
-import vn.edu.hcmut.nxvhung.bloomserver.sender.BloomSender;
+import vn.edu.hcmut.nxvhung.bloomserver.sender.BlacklistSender;
 
 @RestController
 public class TestController {
   @Autowired
-  private BloomSender bloomSender;
+  private BlacklistSender bloomSender;
   @GetMapping("/test")
   public String test() {
-    bloomSender.sendMessage("companyA_request", "Message cua Hung");
     return "OK";
   }
 

@@ -1,28 +1,26 @@
 package vn.edu.hcmut.nxvhung.bloomserver.listener;
 
 import jakarta.jms.JMSException;
-import jakarta.jms.TextMessage;
 import org.springframework.jms.annotation.JmsListener;
 import org.springframework.stereotype.Component;
 import vn.edu.hcmut.nxvhung.bloomfilter.dto.Message;
-//import jakarta.jms.Message;
+import vn.edu.hcmut.nxvhung.bloomserver.service.BlacklistService;
 
 
 @Component
 public class EventListener {
 
+  private final BlacklistService blacklistService;
+
+  public EventListener(BlacklistService blacklistService) {
+    this.blacklistService = blacklistService;
+  }
+
+
   @JmsListener(destination = "company_A_request")
-  public String receiveMessage(final Message jsonMessage) throws JMSException {
-    String messageData = null;
-//    System.out.println("Tin nhắn nhận được: " + jsonMessage.getLocalTimestamp() + jsonMessage.getFilterable());
-    String response = null;
-    if(jsonMessage instanceof TextMessage) {
-      TextMessage textMessage = (TextMessage)jsonMessage;
-      messageData = textMessage.getText();
-//      Map map = new Gson().fromJson(messageData, Map.class);
-//      response  = "Chào " + map.get("name");
-    }
-    return response;
+  public void receiveMessage(final Message message) throws JMSException {
+    blacklistService.addBlacklist("company_A_request", message);
+    blacklistService.mergeAndSendBack();
   }
 
 

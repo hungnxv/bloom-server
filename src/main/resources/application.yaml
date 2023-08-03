@@ -5,3 +5,6 @@ spring:
     password: admin
     packages:
       trust-all: true
+
+mode:
+  async: false
