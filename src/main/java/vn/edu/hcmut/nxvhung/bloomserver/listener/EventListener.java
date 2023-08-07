@@ -17,9 +17,9 @@ public class EventListener {
   }
 
 
-  @JmsListener(destination = "company_A_request")
+  @JmsListener(destination = "company_request")
   public void receiveMessage(final Message message) throws JMSException {
-    blacklistService.addBlacklist("company_A_request", message);
+    blacklistService.addBlacklist(message.getCompanyName(), message);
     blacklistService.mergeAndSendBack();
   }
 

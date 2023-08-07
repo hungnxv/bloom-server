@@ -24,6 +24,7 @@ public class BlacklistService {
   }
 
   public void mergeAndSendBack() {
+
     blacklistSender.sendMessage("company_A_response" , new Message(2, new MergeableCountingBloomFilter(10, 1, Hash.MURMUR_HASH, 4)));
   }
 
