@@ -1,9 +1,11 @@
 package vn.edu.hcmut.nxvhung.bloomserver.listener;
 
 import jakarta.jms.JMSException;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jms.annotation.JmsListener;
 import org.springframework.stereotype.Component;
 import vn.edu.hcmut.nxvhung.bloomfilter.dto.Message;
+import vn.edu.hcmut.nxvhung.bloomserver.config.CompaniesNetworkSetting;
 import vn.edu.hcmut.nxvhung.bloomserver.service.BlacklistService;
 
 
@@ -16,6 +18,8 @@ public class EventListener {
     this.blacklistService = blacklistService;
   }
 
+  @Autowired
+  private CompaniesNetworkSetting companiesNetworkSetting;
 
   @JmsListener(destination = "company_request")
   public void receiveMessage(final Message message) throws JMSException {

@@ -8,3 +8,12 @@ spring:
 
 mode:
   async: false
+
+
+companies:
+  network:
+    company_A: company_B, company_D
+    company_B: company_A, company_C, company_E
+    company_C: company_B, company_E
+    company_D: company_A, company_E
+    company_E: company_C, company_D, company_B
