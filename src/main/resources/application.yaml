@@ -17,3 +17,9 @@ companies:
     company_C: company_B, company_E
     company_D: company_A, company_E
     company_E: company_C, company_D, company_B
+  response-queue-config:
+    company_A: company_A_response
+    company_B: company_B_response
+    company_C: company_C_response
+    company_D: company_D_response
+    company_E: company_E_response

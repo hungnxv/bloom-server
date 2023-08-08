@@ -4,7 +4,7 @@ import java.io.Serializable;
 import vn.edu.hcmut.nxvhung.bloomfilter.Filterable;
 import vn.edu.hcmut.nxvhung.bloomfilter.impl.Key;
 
-public class CompanyMetaData implements Serializable {
+public class CompanyData implements Serializable {
   private static final long serialVersionUID = 2843843883L;
 
   private Filterable<Key> blacklist;
@@ -13,7 +13,7 @@ public class CompanyMetaData implements Serializable {
 
   private String companyId;
 
-  public CompanyMetaData(Filterable<Key> blacklist, String companyId, Integer currentTimeStamp) {
+  public CompanyData(Filterable<Key> blacklist, String companyId, Integer currentTimeStamp) {
     this.blacklist = blacklist;
     this.currentTimeStamp = currentTimeStamp;
     this.companyId = companyId;
