@@ -21,7 +21,6 @@ public class BlacklistSender {
 
   public void sendMessage(String destination, final Message message) {
     jmsTemplate.convertAndSend(destination, message);
-
   }
 
 
