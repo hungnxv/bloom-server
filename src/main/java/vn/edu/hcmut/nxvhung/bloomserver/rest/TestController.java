@@ -7,10 +7,9 @@ import org.springframework.web.bind.annotation.RestController;
 import vn.edu.hcmut.nxvhung.bloomserver.sender.BlacklistSender;
 
 @RestController
-@RequiredArgsConstructor
-
+//@RequiredArgsConstructor
 public class TestController {
-  private final BlacklistSender bloomSender;
+  private BlacklistSender bloomSender;
   @GetMapping("/test")
   public String test() {
     return "OK";

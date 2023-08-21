@@ -48,17 +48,23 @@ public class BlacklistService {
     }
 
     blacklistData.put(companyName, new CompanyData(message.getBlacklist(), companyName, message.getTimestamp()));
-    blacklistData.forEach((key, value) -> mergeAndSendBack(key));
+    blacklistData.forEach((key, value) -> {
+      try {
+        mergeAndSendBack(key);
+      } catch (CloneNotSupportedException e) {
+        throw new RuntimeException(e);
+      }
+    });
 
   }
 
-  private void mergeAndSendBack(String companyName) {
+  private void mergeAndSendBack(String companyName) throws CloneNotSupportedException {
     List<String> partners = companiesSetting.getRelatedCompanies(companyName);
     boolean canSych  = canSynch(partners);
 
     if(canSych) {
-      Map<String, CompanyData> blacklistMap = blacklistCompanyByTimestamp.get(currentTimestamp.get())
-      Filterable<Key> mergedBlacklist = (Filterable<Key>) blacklistMap.get(companyName).getBlacklist().clone();//get a copy
+      Map<String, CompanyData> blacklistMap = blacklistCompanyByTimestamp.get(currentTimestamp.get());
+      Filterable<Key> mergedBlacklist = (Filterable<Key>) ((Filterable<Key>) blacklistMap.get(companyName).getBlacklist()).clone();//get a copy
       partners.forEach(p -> mergedBlacklist.merge(blacklistMap.get(p).getBlacklist()));
       blacklistSender.sendMessage(companiesSetting.getResponseQueue(companyName), new Message(currentTimestamp.intValue(), mergedBlacklist));
     }
