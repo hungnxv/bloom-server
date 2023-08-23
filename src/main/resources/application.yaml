@@ -8,6 +8,7 @@ spring:
 
 mode:
   async: false
+  epsilon: 2
 
 
 companies:
