@@ -10,6 +10,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.ParameterResolutionDelegate;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -17,6 +18,7 @@ import org.springframework.stereotype.Service;
 import vn.edu.hcmut.nxvhung.bloomfilter.Filterable;
 import vn.edu.hcmut.nxvhung.bloomfilter.dto.Message;
 import vn.edu.hcmut.nxvhung.bloomfilter.impl.Key;
+import vn.edu.hcmut.nxvhung.bloomfilter.impl.MergeableCountingBloomFilter;
 import vn.edu.hcmut.nxvhung.bloomserver.config.CompaniesSetting;
 import vn.edu.hcmut.nxvhung.bloomserver.dto.CompanyData;
 import vn.edu.hcmut.nxvhung.bloomserver.sender.BlacklistSender;
@@ -29,6 +31,8 @@ public class BlacklistService {
   private final BlacklistSender blacklistSender;
   private final CompaniesSetting companiesSetting;
 
+  private final RedisService redisService;
+
   @Value("${mode.async}")
   private boolean async;
 
@@ -38,16 +42,20 @@ public class BlacklistService {
   private static final AtomicInteger currentTimestamp = new AtomicInteger(0);
   private static final Map<String, Integer> maxTimestampsMap = new ConcurrentHashMap<>();
 
-  public BlacklistService(BlacklistSender blacklistSender, CompaniesSetting companiesSetting) {
+  public BlacklistService(BlacklistSender blacklistSender, CompaniesSetting companiesSetting, RedisService redisService) {
     this.blacklistSender = blacklistSender;
     this.companiesSetting = companiesSetting;
+    this.redisService = redisService;
   }
 
   @Async
   public void handleBlacklist(Message message) {
     String companyName = message.getCompanyName();
     currentTimestamp.set(Math.max(message.getTimestamp(), currentTimestamp.get()));
+    redisService.setTimestamp(currentTimestamp.get());
     maxTimestampsMap.put(companyName, message.getTimestamp());
+    redisService.saveMaxTimestampsMap(maxTimestampsMap);
+
     Map<String, CompanyData> blacklistData = blacklistCompanyByTimestamp.get(message.getTimestamp());
     if (Objects.isNull(blacklistData)) {
       blacklistData = new HashMap<>();
@@ -55,23 +63,18 @@ public class BlacklistService {
     }
 
     blacklistData.put(companyName, new CompanyData(message.getBlacklist(), companyName, message.getTimestamp()));
-    blacklistData.forEach((key, value) -> {
-      try {
-        mergeAndSendBack(key);
-      } catch (CloneNotSupportedException e) {
-        throw new RuntimeException(e);
-      }
-    });
+    redisService.saveBlacklistCompanyByTimestamp(blacklistCompanyByTimestamp);
+    blacklistData.forEach((key, value) -> mergeAndSendBack(key));
 
   }
 
-  private void mergeAndSendBack(String companyName) throws CloneNotSupportedException {
+  private void mergeAndSendBack(String companyName) {
     List<String> partners = companiesSetting.getRelatedCompanies(companyName);
     boolean canSyc = canSync(partners);
 
     if (canSyc) {
       Map<String, CompanyData> blacklistMap = blacklistCompanyByTimestamp.get(currentTimestamp.get());
-      Filterable<Key> mergedBlacklist = (Filterable<Key>) ((Filterable<Key>) blacklistMap.get(companyName).getBlacklist()).clone();//get a copy
+      Filterable<Key> mergedBlacklist = ((MergeableCountingBloomFilter) blacklistMap.get(companyName).getBlacklist()).copySetting();
       partners.forEach(p -> mergedBlacklist.merge(blacklistMap.get(p).getBlacklist()));
       blacklistSender.sendMessage(companiesSetting.getResponseQueue(companyName), new Message(currentTimestamp.intValue(), mergedBlacklist));
     }
@@ -82,11 +85,15 @@ public class BlacklistService {
     return partners.stream().allMatch(blacklistMap::containsKey);
   }
 
-  @Scheduled(cron = "10 * * * *")
+  @Scheduled(cron = "10 0 * * * *")
   public void checkAndSendToTheClientsInAsyncMode() {
+
     if (!async) {
+      logger.info("checkAndSendToTheClientsInAsyncMode: async is false: stop");
       return;
     }
+    logger.info("checkAndSendToTheClientsInAsyncMode: get data from current timestamp {}", currentTimestamp.get());
+
     Map<String, CompanyData> currentBlacklist = blacklistCompanyByTimestamp.get(currentTimestamp.get());
 
     for (Entry<String, CompanyData> entry : currentBlacklist.entrySet()) {
@@ -97,22 +104,20 @@ public class BlacklistService {
   private void processByCompany(Entry<String, CompanyData> entry)  {
     String companyName = entry.getKey();
     List<String> partners = companiesSetting.getRelatedCompanies(companyName);
-    boolean canSync = partners.stream().allMatch(p -> Math.abs(currentTimestamp.get() - maxTimestampsMap.getOrDefault(p, 0)) > epsilon);
+    boolean canSync = partners.stream().allMatch(p -> Math.abs(currentTimestamp.get() - maxTimestampsMap.getOrDefault(p, 0)) <= epsilon);
     if(!canSync) {
       return;
     }
 
     Map<String, CompanyData> blacklistMap = blacklistCompanyByTimestamp.get(currentTimestamp.get());
-    try {
-      Filterable<Key> mergedBlacklist = (Filterable<Key>) ((Filterable<Key>) blacklistMap.get(companyName).getBlacklist()).clone();
-      partners.forEach(p -> {
-        Optional<Filterable<Key>> blacklist = Optional.ofNullable(blacklistCompanyByTimestamp.get(maxTimestampsMap.getOrDefault(p, 0))).map(CompanyData::getBlacklist);
-        blacklist.ifPresent(mergedBlacklist::merge);
-      });
-    } catch (CloneNotSupportedException e) {
-      throw new RuntimeException(e);
-    }
+    Filterable<Key> mergedBlacklist = ((MergeableCountingBloomFilter) blacklistMap.get(companyName).getBlacklist()).copySetting();
+    partners.forEach(p -> {
+      Optional<Filterable<Key>> blacklist = Optional.ofNullable(blacklistCompanyByTimestamp.get(maxTimestampsMap.getOrDefault(p, 0))).map(b -> b.get(p)).map(CompanyData::getBlacklist);
+      blacklist.ifPresent(mergedBlacklist::merge);
+    });
 
+    Message message = new Message(currentTimestamp.intValue(), mergedBlacklist);
+    blacklistSender.sendMessage(companiesSetting.getResponseQueue(companyName), message);
   }
 
 
