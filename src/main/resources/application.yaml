@@ -5,6 +5,14 @@ spring:
     password: admin
     packages:
       trust-all: true
+  data:
+    redis:
+      database: 0
+      host: localhost
+      port: 6379
+      password: 123456
+      timeout: 60000
+
 
 mode:
   async: false
