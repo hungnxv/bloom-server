@@ -44,7 +44,7 @@ public class RedisService {
     return (Integer) timestampOperation.get(TIMESTAMP_HASH_KEY) ;
   }
 
-  public void saveMaxTimestampsMap(Map<String, Integer> maxTimestampsMap) {
+  public void saveTimestampsVector(Map<String, Integer> maxTimestampsMap) {
     hashOperations.put(HASH_KEY, MAX_TIMESTAMP_MAP_HASH_KEY, maxTimestampsMap);
   }
 
