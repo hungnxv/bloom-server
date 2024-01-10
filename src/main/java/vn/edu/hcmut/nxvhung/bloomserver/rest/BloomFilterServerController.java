@@ -18,7 +18,7 @@ public class TestController {
   @GetMapping("/checkAndSendToTheClientsInAsyncMode")
   public String test() {
 //    log.info("Trigger blacklistService.checkAndSendToTheClientsInAsyncMode()");
-    blacklistService.checkAndSendToTheClientsInAsyncMode();
+//    blacklistService.checkAndSendToTheClientsInAsyncMode();
     return "OK";
   }
 
