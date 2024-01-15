@@ -5,7 +5,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.slf4j.Logger;
@@ -26,7 +25,7 @@ import vn.edu.hcmut.nxvhung.bloomserver.sender.BlacklistSender;
 public class BlacklistService {
 
   private static final Logger logger = LoggerFactory.getLogger(BlacklistService.class);
-  private final Map<Integer, Map<String, CompanyData>> blacklistCompanyByTimestamp = new HashMap<>();
+  private final Map<String, CompanyData> blacklistData = new ConcurrentHashMap<>();
   private final BlacklistSender blacklistSender;
   private final CompaniesSetting companiesSetting;
 
@@ -50,20 +49,30 @@ public class BlacklistService {
   @Async
   public void handleBlacklist(Message message) {
     String companyName = message.getCompanyName();
-    currentTimestamp.set(Math.max(message.getTimestamp(), currentTimestamp.get()));
+    Integer companyTimestamp = timestampsVector.getOrDefault(companyName, 0);
+
+    Integer receivedTimestamp = message.getTimestamp();
+    if (companyTimestamp > receivedTimestamp) {
+      logger.info("Company {} sent outdated blacklist. Received timestamp: {}. Current timestamp: {}", companyName, receivedTimestamp,
+          companyTimestamp);
+      return;
+    }
+    currentTimestamp.set(Math.max(receivedTimestamp, currentTimestamp.get()));
     redisService.setTimestamp(currentTimestamp.get());
 
-    timestampsVector.put(companyName, Math.max(message.getTimestamp(), timestampsVector.getOrDefault(companyName, 0)));
+    timestampsVector.put(companyName, receivedTimestamp);
     redisService.saveTimestampsVector(timestampsVector);
 
-    Map<String, CompanyData> blacklistData = blacklistCompanyByTimestamp.get(message.getTimestamp());
-    if (Objects.isNull(blacklistData)) {
-      blacklistData = new HashMap<>();
-      blacklistCompanyByTimestamp.put(message.getTimestamp(), blacklistData);
+    CompanyData companyData = blacklistData.get(companyName);
+    if (Objects.isNull(companyData)) {
+      companyData = new CompanyData(message.getBlacklist(), companyName, receivedTimestamp);
+      blacklistData.put(companyName, companyData);
     }
 
-    blacklistData.put(companyName, new CompanyData(message.getBlacklist(), companyName, message.getTimestamp()));
-    redisService.saveBlacklistCompanyByTimestamp(blacklistCompanyByTimestamp);
+    companyData.setBlacklist(message.getBlacklist());
+    companyData.setCurrentTimeStamp(receivedTimestamp);
+    companyData.setProcessed(false);
+    redisService.saveBlacklistData(blacklistData);
     blacklistData.forEach((key, value) -> mergeAndSendBack(key));
 
   }
@@ -72,58 +81,78 @@ public class BlacklistService {
     List<String> partners = companiesSetting.getRelatedCompanies(companyName);
 
     boolean canSyc = canSync(companyName, partners);
-
-    if (canSyc) {
-      Map<String, CompanyData> blacklistMap = blacklistCompanyByTimestamp.get(currentTimestamp.get());
-      Filterable<Key> mergedBlacklist = ((MergeableCountingBloomFilter) blacklistMap.get(companyName).getBlacklist()).copySetting();
-      partners.forEach(p -> mergedBlacklist.merge(blacklistMap.get(p).getBlacklist()));
-      Map<String, Integer> partnerTimestampVector = new HashMap<>(partners.size()  + 1);
-      partnerTimestampVector.put("BFS", currentTimestamp.get());
-      partners.forEach(partner ->partnerTimestampVector.put(partner, timestampsVector.get(partner)));
-      blacklistSender.sendMessage(companiesSetting.getResponseQueue(companyName), new Message(currentTimestamp.intValue(), mergedBlacklist, timestampsVector));
+    if (!canSyc) {
+      return;
     }
+
+    CompanyData companyData = blacklistData.get(companyName);
+    sendBackToBFC(companyName, companyData, partners);
+
+  }
+
+  private void sendBackToBFC(String companyName, CompanyData companyData, List<String> partners) {
+    Filterable<Key> mergedBlacklist = ((MergeableCountingBloomFilter) companyData.getBlacklist()).copySetting();
+    partners.forEach(p -> mergedBlacklist.merge(blacklistData.get(p).getBlacklist()));
+    Map<String, Integer> partnerTimestampVector = new HashMap<>(partners.size() + 1);
+    partnerTimestampVector.put("BFS", currentTimestamp.get());
+    partners.forEach(partner -> partnerTimestampVector.put(partner, timestampsVector.get(partner)));
+    companyData.setProcessed(true);
+    logger.info("BFS: send blacklist to company {}, timestamp: {}", companyName, partnerTimestampVector);
+    blacklistSender.sendMessage(companiesSetting.getResponseQueue(companyName),
+        new Message(currentTimestamp.intValue(), mergedBlacklist, partnerTimestampVector));
   }
 
   private boolean canSync(String companyName, List<String> partners) {
     Integer lastTimestamp = timestampsVector.getOrDefault(companyName, 0);
-    Map<String, CompanyData> blacklistMap = blacklistCompanyByTimestamp.get(lastTimestamp);
-    return partners.stream().allMatch(blacklistMap::containsKey);
+    if (lastTimestamp < currentTimestamp.get()) {
+      return false;
+    }
+    return partners.stream().allMatch(p -> lastTimestamp.equals(timestampsVector.getOrDefault(p, 0)));
   }
 
   @Scheduled(cron = "10 0 * * * *")
-  public void checkAndSendToTheClientsInAsyncMode() {
+  public void checkAndSendToTheClients() {
 
     if (!async) {
-      logger.info("checkAndSendToTheClientsInAsyncMode: async is false: stop");
+      logger.info("checkAndSendToTheClients: processing in sync mode");
+      processSyncMode();
       return;
     }
+
     logger.info("checkAndSendToTheClientsInAsyncMode: get data from current timestamp {}", currentTimestamp.get());
 
-    Map<String, CompanyData> currentBlacklist = blacklistCompanyByTimestamp.get(currentTimestamp.get());
-
-    for (Entry<String, CompanyData> entry : currentBlacklist.entrySet()) {
+    for (Entry<String, CompanyData> entry : blacklistData.entrySet()) {
       processByCompany(entry);
     }
+    redisService.saveBlacklistData(blacklistData);
+
   }
 
-  private void processByCompany(Entry<String, CompanyData> entry)  {
+  private void processSyncMode() {
+    for (Entry<String, CompanyData> entry : blacklistData.entrySet()) {
+      String companyName = entry.getKey();
+      CompanyData companyData = entry.getValue();
+      if (companyData.isProcessed()) {
+        continue;
+      }
+      List<String> partners = companiesSetting.getRelatedCompanies(entry.getKey());
+      if (canSync(companyName, partners)) {
+        sendBackToBFC(entry.getKey(), companyData, partners);
+      }
+
+    }
+    redisService.saveBlacklistData(blacklistData);
+
+  }
+
+  private void processByCompany(Entry<String, CompanyData> entry) {
     String companyName = entry.getKey();
     List<String> partners = companiesSetting.getRelatedCompanies(companyName);
     boolean canSync = partners.stream().allMatch(p -> Math.abs(currentTimestamp.get() - timestampsVector.getOrDefault(p, 0)) <= epsilon);
-    if(!canSync) {
+    if (!canSync) {
       return;
     }
-
-    Map<String, CompanyData> blacklistMap = blacklistCompanyByTimestamp.get(currentTimestamp.get());
-    Filterable<Key> mergedBlacklist = ((MergeableCountingBloomFilter) blacklistMap.get(companyName).getBlacklist()).copySetting();
-    partners.forEach(p -> {
-      Optional<Filterable<Key>> blacklist = Optional.ofNullable(blacklistCompanyByTimestamp.get(timestampsVector.getOrDefault(p, 0))).map(b -> b.get(p)).map(CompanyData::getBlacklist);
-      blacklist.ifPresent(mergedBlacklist::merge);
-    });
-
-    Message message = new Message(currentTimestamp.intValue(), mergedBlacklist);
-    blacklistSender.sendMessage(companiesSetting.getResponseQueue(companyName), message);
+    sendBackToBFC(companyName, entry.getValue(), partners);
   }
-
 
 }

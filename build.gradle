@@ -28,6 +28,8 @@ dependencies {
 	//implementation 'com.github.vectorclock:vector-clock:1.0-SNAPSHOT'
 	implementation 'vn.edu.hcmut.nxvhung:bloom-filter:0.0.1-SNAPSHOT'
 	compileOnly 'org.projectlombok:lombok'
+	annotationProcessor 'org.projectlombok:lombok'
+
 
 
 }
